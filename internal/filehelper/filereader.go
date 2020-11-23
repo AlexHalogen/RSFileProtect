@@ -2,26 +2,28 @@ package filehelper
 
 import (
 	"os"
+	"encoding/binary"
+	"alexhalogen/rsfileprotect/internal/types"
+
 )
 
-type ChunkedFile struct {
+type ChunkedReader struct {
 	file *os.File
 	chunkSize int
 	offset int
 }
 
-func NewChunkedFile(f *os.File, cs int, offset int) (ChunkedFile) {
-	cf := ChunkedFile{file: f, chunkSize: cs, offset: offset}
+func NewChunkedReader(f *os.File, cs int, offset int) (ChunkedReader) {
+	cf := ChunkedReader{file: f, chunkSize: cs, offset: offset}
 	return cf
 }
 
-func (cf ChunkedFile) ReadNext(buffer [][]byte) (chunksRead int, eof bool){
+func (cf ChunkedReader) ReadNext(buffer [][]byte) (chunksRead int, eof bool){
 	numChunks := len(buffer)
 	if numChunks == 0 {
 		return 0, false
 	}
 	bufferSize := cap(buffer[0])
-
 	eof = false
 	lastChunk := -1
 	lastSize := 0
@@ -32,7 +34,11 @@ func (cf ChunkedFile) ReadNext(buffer [][]byte) (chunksRead int, eof bool){
 			if bytesRead != 0 {
 				print(err.Error())	// non-eof
 			}
-			eof = true
+			if i == 0 {
+				eof = true
+				chunksRead = 0
+				return
+			}
 			break
 		} else {
 			lastSize = bytesRead
@@ -49,3 +55,6 @@ func (cf ChunkedFile) ReadNext(buffer [][]byte) (chunksRead int, eof bool){
 }
 
 
+func ReadMeta(f *os.File, meta *types.Metadata) (error) {
+	return binary.Read(f, binary.LittleEndian, meta)
+}

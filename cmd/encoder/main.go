@@ -50,7 +50,7 @@ func main() {
 	bufferSize := 4096
 	
 	meta.FileSize = 114514
-	meta.BlockSize = (uint32)(bufferSize)
+	meta.BlockSize = (int32)(bufferSize)
 	meta.NumData = 10
 	meta.NumRecovery = 1
 
@@ -67,12 +67,15 @@ func main() {
 
 	enc, err := reedsolomon.New(numData, numRecovery)
 
-	cf := filehelper.NewChunkedFile(inFile, bufferSize, numData)
-	eof := false
-	for !eof {
+	cf := filehelper.NewChunkedReader(inFile, bufferSize, numData)
+	// eof := false
+	for {
 		buffer = buffer_pages
 		var chunksRead int
-		chunksRead, eof = cf.ReadNext(buffer[0:numData])
+		chunksRead, eof := cf.ReadNext(buffer[0:numData])
+		if eof {
+			break
+		}
 		if chunksRead != numData {
 			for i:=chunksRead+1; i<numData; i++ {
 				buffer[i] = zero_page
