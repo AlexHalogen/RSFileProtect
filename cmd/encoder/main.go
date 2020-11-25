@@ -49,7 +49,12 @@ func main() {
 	numRecovery := 1
 	bufferSize := 4096
 	
-	meta.FileSize = 114514
+	fs, err := inFile.Stat()
+	if err != nil {
+		fmt.Printf("Cannot read stats for %s\n", inName)
+	}
+
+	meta.FileSize = fs.Size()
 	meta.BlockSize = (int32)(bufferSize)
 	meta.NumData = 10
 	meta.NumRecovery = 1

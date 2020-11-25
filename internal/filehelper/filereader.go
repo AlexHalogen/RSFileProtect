@@ -54,6 +54,11 @@ func (cf ChunkedReader) ReadNext(buffer [][]byte) (chunksRead int, eof bool){
 	return
 }
 
+func (cf ChunkedReader) SkipNext(chunks int, chunkSize int) (error){
+	_, err := cf.file.Seek( int64(chunks*chunkSize), 1)
+	return err
+}
+
 
 func ReadMeta(f *os.File, meta *types.Metadata) (error) {
 	return binary.Read(f, binary.LittleEndian, meta)

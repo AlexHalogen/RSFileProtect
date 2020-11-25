@@ -1,7 +1,7 @@
 package types
 
 type Metadata struct {
-	FileSize 		uint64 // file size 
+	FileSize 		int64 // file size
 	BlockSize 		int32 // size of each block
 	NumData 		uint16 // number of data chunks in one iteration
 	NumRecovery 	uint16 // number of ecc chunks in one iteration
