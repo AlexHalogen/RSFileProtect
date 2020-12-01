@@ -4,18 +4,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
-    "hash/crc32"
-	"github.com/klauspost/reedsolomon"
-	"alexhalogen/rsfileprotect/internal/filehelper"
 	"alexhalogen/rsfileprotect/internal/types"
+	"alexhalogen/rsfileprotect/internal/encoding"
 )
 
 
 var outName = flag.String("out", "", "Output name")
 
 func main() {
-	
-	var meta types.Metadata
 
 	flag.Parse()
 	args := flag.Args()
@@ -45,73 +41,14 @@ func main() {
 	defer crcFile.Close()
 
 
-	numData := 10
-	numRecovery := 1
-	bufferSize := 4096
-	
 	fs, err := inFile.Stat()
 	if err != nil {
 		fmt.Printf("Cannot read stats for %s\n", inName)
 	}
 
-	meta.FileSize = fs.Size()
-	meta.BlockSize = (int32)(bufferSize)
-	meta.NumData = 10
-	meta.NumRecovery = 1
-
-	writer := filehelper.NewFileWriter(meta, eccFile, crcFile)
-	writer.WriteMeta()
-	buffer_pages := make([][]byte, numData+numRecovery) // keeps buffer references
-	buffer := make([][]byte, numData+numRecovery) // buffer array used during calculation
-	for arr := range buffer {
-		buffer_pages[arr] = make([]byte, bufferSize)
-	}
-
-	zero_page := make([]byte, bufferSize)
-	filehelper.Memset(zero_page, 0, bufferSize, 0)
-
-	enc, err := reedsolomon.New(numData, numRecovery)
-
-	cf := filehelper.NewChunkedReader(inFile, bufferSize, numData)
-	// eof := false
-	for {
-		buffer = buffer_pages
-		var chunksRead int
-		chunksRead, eof := cf.ReadNext(buffer[0:numData])
-		if eof {
-			break
-		}
-		if chunksRead != numData {
-			for i:=chunksRead+1; i<numData; i++ {
-				buffer[i] = zero_page
-			}
-		}
-
-		err = enc.Encode(buffer)
-		
-		if err != nil {
-			fmt.Println("Encoding failed!")
-			return
-		}
-
-		ok, err := enc.Verify(buffer)
-
-		if err != nil || !ok {
-			fmt.Println("Encoding verification failed!")
-			return
-		}
-		err =  writer.WriteECCChunk(buffer[numData:])
-		if err != nil {
-			fmt.Println(err)
-		}
-		eccs := make([]uint32, len(buffer))
-		for i:=0; i<len(buffer); i++ {
-			eccs[i] = crc32.ChecksumIEEE(buffer[i])
-		}
-		err = writer.WriteCRCChunk(eccs)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
+	meta := types.Metadata{FileSize: fs.Size(), BlockSize:4096, NumData:10, NumRecovery: 1}
+	encoding.Encode(meta, inFile, eccFile, crcFile)
 
 }
+
+
