@@ -1,0 +1,12 @@
+language: go
+
+go:
+  - 1.13.8
+before_install:
+  - go get -t -v ./...
+
+script:
+  - go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=alexhalogen/rsfileprotect/internal/... ./test/... 
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
