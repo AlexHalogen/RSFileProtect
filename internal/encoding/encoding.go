@@ -100,5 +100,6 @@ func Encode(meta types.Metadata, inFile *os.File, eccFile *os.File, crcFile *os.
 			fmt.Println(err)
 		}
 	}
+	writer.Sync()
 	return true
 }
