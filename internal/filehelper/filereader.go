@@ -2,9 +2,9 @@ package filehelper
 
 import (
 	"os"
+	"bufio"
 	"encoding/binary"
 	"alexhalogen/rsfileprotect/internal/types"
-
 )
 
 type ChunkedReader struct {
@@ -13,9 +13,36 @@ type ChunkedReader struct {
 	offset int
 }
 
+type CRCReader struct {
+	file *bufio.Reader
+	buffer []byte
+}
+
 func NewChunkedReader(f *os.File, cs int, offset int) (ChunkedReader) {
 	cf := ChunkedReader{file: f, chunkSize: cs, offset: offset}
 	return cf
+}
+
+func NewCRCReader(f *os.File, size int) (CRCReader) {
+	var reader CRCReader
+	reader.buffer = make([]byte, 4)
+	if size == 0 {
+		reader.file = bufio.NewReader(f)
+	} else {
+		reader.file = bufio.NewReaderSize(f, size)
+	}
+	return reader
+}
+
+func (cr CRCReader) ReadNext(out []uint32) (int, error) {
+	for i, _ := range out {
+		err := binary.Read(cr.file, binary.LittleEndian, cr.buffer)
+		if err != nil {
+			return i, err
+		}
+		out[i] = binary.LittleEndian.Uint32(cr.buffer)
+	}
+	return len(out), nil
 }
 
 func (cf ChunkedReader) ReadNext(buffer [][]byte) (chunksRead int, eof bool){

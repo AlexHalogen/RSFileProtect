@@ -28,7 +28,7 @@ SOFTWARE.*/
 package encoding
 import (
 	"os"
-	"fmt"
+	"log"
 	"hash/crc32"
 	"github.com/klauspost/reedsolomon"
 	"alexhalogen/rsfileprotect/internal/filehelper"
@@ -54,7 +54,7 @@ func Encode(meta types.Metadata, inFile *os.File, eccFile *os.File, crcFile *os.
 
 	enc, err := reedsolomon.New(numData, numRecovery)
 	if err != nil {
-		fmt.Printf("Coder initialization failed at (%d, %d)\n", numData, numRecovery)
+		log.Printf("Coder initialization failed at (%d, %d)\n", numData, numRecovery)
 		return false
 	}
 
@@ -77,19 +77,20 @@ func Encode(meta types.Metadata, inFile *os.File, eccFile *os.File, crcFile *os.
 		err = enc.Encode(buffer)
 		
 		if err != nil {
-			fmt.Println("Encoding failed!")
+			log.Println("Encoding failed!")
 			return false
 		}
 
 		ok, err := enc.Verify(buffer)
 
 		if err != nil || !ok {
-			fmt.Println("Encoding verification failed!")
+			log.Println("Encoding verification failed!")
 			return false
 		}
 		err =  writer.WriteECCChunk(buffer[numData:])
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
+			return false
 		}
 		eccs := make([]uint32, len(buffer))
 		for i:=0; i<len(buffer); i++ {
@@ -97,7 +98,8 @@ func Encode(meta types.Metadata, inFile *os.File, eccFile *os.File, crcFile *os.
 		}
 		err = writer.WriteCRCChunk(eccs)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
+			return false
 		}
 	}
 	writer.Sync()

@@ -2,53 +2,88 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"alexhalogen/rsfileprotect/internal/types"
 	"alexhalogen/rsfileprotect/internal/encoding"
 )
 
 
-var outName = flag.String("out", "", "Output name")
+var eccName = flag.String("ecc", "", "Filename of generated ecc file")
+var blockSize = flag.Int("bs", 4096, "Size of chunks that files are splitted into during reed-solomon encoding")
+var level = flag.Int("level", 1, "Number of ecc symbols per 10 data symbols, default 1")
 
-func main() {
-
+func mainWithExitCode() (int){
 	flag.Parse()
 	args := flag.Args()
-	inName := args[0]
-	inFile, err := os.Open(inName)
-
-	if err != nil {
-		fmt.Println(err)
-		return
+	
+	if !sanitizeArgs(args) {
+		return 1
 	}
-	defer inFile.Close()
 
-	eccFile, err := os.OpenFile(*outName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	dataName := args[0]
+	dataFile, err := os.Open(dataName)
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Println(err)
+		return 1
+	}
+	defer dataFile.Close()
+
+	eccFile, err := os.OpenFile(*eccName, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+
+	if err != nil {
+		log.Println(err)
+		return 1
 	}
 	defer eccFile.Close()
 
-	crcFile, err := os.OpenFile((*outName)+".crc", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	crcFile, err := os.OpenFile((*eccName)+".crc", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Println(err)
+		return 1
 	}
 	defer crcFile.Close()
 
 
-	fs, err := inFile.Stat()
+	fs, err := dataFile.Stat()
 	if err != nil {
-		fmt.Printf("Cannot read stats for %s\n", inName)
+		log.Printf("Cannot read stats for %s\n", dataName)
+		return 1
 	}
 
-	meta := types.Metadata{FileSize: fs.Size(), BlockSize:4096, NumData:10, NumRecovery: 1}
-	encoding.Encode(meta, inFile, eccFile, crcFile)
-
+	meta := types.Metadata{FileSize: fs.Size(), BlockSize:int32(*blockSize), NumData:10, NumRecovery: uint16(*level)}
+	success := encoding.Encode(meta, dataFile, eccFile, crcFile)
+	if !success {
+		return 1
+	}
+	return 0
 }
 
+func main() {
+	os.Exit(mainWithExitCode())
+}
 
+func sanitizeArgs(args []string) bool {
+	if len(args) < 1 {
+		return false
+	}
+
+	if *eccName == "" {
+		newName := args[0] + ".ecc"
+		eccName = &newName
+	}
+
+	if *level < 1 || *level > 10 {
+		log.Println("Only 1 to 10 symbols are allowed")
+		return false
+	}
+
+	if *blockSize < 0 {
+		log.Println("Chunk size must be a positive integer")
+		return false
+	}
+
+	return true
+}

@@ -11,6 +11,23 @@ import(
 	"alexhalogen/rsfileprotect/internal/types"
 )
 
+
+func equals(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i,v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+/*func filterDataDmg(dmgs []decoding.DamageDesc) []int {
+	ret = make([]int, )
+
+}*/
 func corrupt(contents []byte, pos []int) {
 	for _, i := range pos {
 		contents[i] ^= 0xFF
@@ -83,7 +100,12 @@ func makeTestFiles(t *testing.T, meta types.Metadata, dir string, prefix string)
 }
 
 
-func encodeThenDecode(t *testing.T, meta types.Metadata, prefix string, dmgPos []int, eccDmgPos []int, expectedDmgs int) {
+func encodeThenDecode(
+		t *testing.T, meta types.Metadata, prefix string, 
+		dmgPos []int, 
+		eccDmgPos []int, 
+		expectedDmgs []int,  // dmg sections
+		expectedRepairs []int) {
 
 	dir, err := ioutil.TempDir("","")
 	size := int(meta.FileSize)
@@ -110,8 +132,22 @@ func encodeThenDecode(t *testing.T, meta types.Metadata, prefix string, dmgPos [
 		t.Error("Generic error when decoding")
 		t.FailNow()
 	}
-	if len(damages) != expectedDmgs {
-		t.Errorf("Decoder detected %d error, expecting %d", len(damages), expectedDmgs)
+
+	// filter damages by type
+	var dd, ed, ad []int
+	for _, d := range damages {
+		if len(d.DataDamage) != 0 {
+			dd = append(dd, d.Section)
+		}
+
+		if len(d.EccDamage) != 0 {
+			ed = append(ed, d.Section)
+		}
+		ad = append(ad, d.Section)
+	}
+
+	if !equals(ad, expectedDmgs) {
+		t.Errorf("Decoder detected error %v, expecting %v", ad, expectedDmgs)
 		t.FailNow()
 	}
 
@@ -126,11 +162,23 @@ func encodeThenDecode(t *testing.T, meta types.Metadata, prefix string, dmgPos [
 		if err != nil {
 			t.Fatal("Cannot create fixed file")
 		}
-		success := decoding.FastRepair(nil, rf, file, ef, damages) // feed in damaged file
-		if !success  {
-			t.Error("Error repairing file")
+		repaired, success := decoding.FastRepair(nil, rf, file, ef, damages) // feed in damaged file
+		if !equals(repaired, expectedRepairs) {
+			t.Log(repaired)
+			t.Log(expectedRepairs)
+			t.Error("Failed to repair all recoverable damages")
 			t.FailNow()
 		}
+
+		
+		if equals(dd, expectedRepairs) != success { // equals && !success, or !equals && success
+			t.Error("Incorrect fastRepair return value")
+			t.Log(dd)
+			t.Log(expectedRepairs)
+			t.Log(success)
+			t.FailNow()
+		}
+
 		rf.Seek(0, io.SeekStart)
 		fs, _ := rf.Stat()
 		newSize := fs.Size()
@@ -142,8 +190,14 @@ func encodeThenDecode(t *testing.T, meta types.Metadata, prefix string, dmgPos [
 		rf.Read(rContents)
 		for i := range contents {
 			if contents[i] != rContents[i] {
-				t.Errorf("Repaired file content differs at offset %X", i)
-				t.FailNow()
+				section := i / (int(meta.BlockSize) * int(meta.NumRecovery))
+				for _, v := range(expectedRepairs) {
+					if section == v {
+						// this damage should be repaired
+						t.Errorf("Repaired file content differs at offset %X", i)
+						t.FailNow()		
+					}
+				}
 			}
 		}
 	}
@@ -158,7 +212,8 @@ func TestDecodeSimple(t *testing.T) {
 			"simple35m",
 			[]int{},
 			[]int{},
-			0)
+			[]int{},
+			[]int{})
 	})
 
 	t.Run("bs=4096,rs=10-1,size=35M+3", func(t *testing.T) {
@@ -168,7 +223,8 @@ func TestDecodeSimple(t *testing.T) {
 			"simple35m3",
 			[]int{},
 			[]int{},
-			0)
+			[]int{},
+			[]int{})
 	})
 	t.Run("bs=4096,rs=10-1,size=103B", func(t *testing.T) {
 		encodeThenDecode(
@@ -177,7 +233,8 @@ func TestDecodeSimple(t *testing.T) {
 			"simple103",
 			[]int{},
 			[]int{},
-			0)
+			[]int{},
+			[]int{})
 	})
 }
 
@@ -189,7 +246,8 @@ func TestDecode1Error(t *testing.T) {
 			"oneerror35m",
 			[]int{36978},
 			[]int{},
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-1,size=35M+3, e=1", func(t *testing.T) {
@@ -199,7 +257,8 @@ func TestDecode1Error(t *testing.T) {
 			"oneerror35m3",
 			[]int{36978},
 			[]int{},
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-1,size=35M+4k, e=1", func(t *testing.T) {
@@ -209,7 +268,8 @@ func TestDecode1Error(t *testing.T) {
 			"oneerror35m4k",
 			[]int{36978},
 			[]int{},
-			1)
+			[]int{0},
+			[]int{0})
 	})
 	t.Run("bs=4096,rs=10-1,size=103B, e=1", func(t *testing.T) {
 		encodeThenDecode(
@@ -218,7 +278,8 @@ func TestDecode1Error(t *testing.T) {
 			"oneerror103",
 			[]int{100},
 			[]int{},
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 }
@@ -231,7 +292,8 @@ func TestDecodeMultError(t *testing.T) {
 			"multerr35m",
 			[]int{36978,36999,40000}, // data chunk #9*3
 			[]int{32+1,32+128, 32+3096}, // ecc chunk #0 *3
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-2,size=35M+4k,e=1d+1e", func(t *testing.T) {
@@ -241,7 +303,8 @@ func TestDecodeMultError(t *testing.T) {
 			"multerr35m4k",
 			[]int{36978,36999,40000}, // data chunk #9*3
 			[]int{32+1,32+128, 32+3096}, // ecc chunk #0 *3
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-2,size=35M+3,e=1d+1e", func(t *testing.T) {
@@ -251,7 +314,8 @@ func TestDecodeMultError(t *testing.T) {
 			"multerr35m3",
 			[]int{36978,36999,40000}, // data chunk #9*3
 			[]int{32+1,32+128, 32+3096}, // ecc chunk #0 *3
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-2,size=103B,e=1d+1e", func(t *testing.T) {
@@ -261,34 +325,59 @@ func TestDecodeMultError(t *testing.T) {
 			"multerr103",
 			[]int{100,88,79,90,77,88},
 			[]int{32+1,32+2,32+3},
-			1)
+			[]int{0},
+			[]int{0})
 	})
 
 	t.Run("bs=4096,rs=10-1,size=35M,e=2d+1e", func(t *testing.T) {
 		encodeThenDecode(
 			t, 
-			types.Metadata{FileSize: 1024*1024*35, BlockSize:4096, NumData:10, NumRecovery:2},
+			types.Metadata{FileSize: 1024*1024*35, BlockSize:4096, NumData:10, NumRecovery:1},
 			"multerr35m",
 			[]int{36978,36999,40000,
 				  368640, 368840}, // data chunk #9*3
 			[]int{32+8192,32+8200, 32+11111}, // ecc chunk #0 *3
-			3)
+			[]int{0,2,9},
+			[]int{0,9})
 	})
 
 	t.Run("bs=4096,rs=10-1,size=35M+4K,e=2d+1e", func(t *testing.T) {
 		encodeThenDecode(
 			t, 
-			types.Metadata{FileSize: 1024*1024*35+4096, BlockSize:4096, NumData:10, NumRecovery:2},
+			types.Metadata{FileSize: 1024*1024*35+4096, BlockSize:4096, NumData:10, NumRecovery:1},
 			"multerr35m",
 			[]int{36978,36999,40000,
 				  368640, 368840}, // data chunk #9*3
 			[]int{32+8192,32+8200, 32+11111}, // ecc chunk #0 *3
-			3)
+			[]int{0,2,9},
+			[]int{0,9})
 	})
 
 }
 
 func TestDecodeTooManyError(t *testing.T) {
+	t.Run("bs=4096,rs=10-1,size=35M,e=2d+2e", func(t *testing.T) {
+		encodeThenDecode(
+			t, 
+			types.Metadata{FileSize: 1024*1024*35, BlockSize:4096, NumData:10, NumRecovery:1},
+			"multerr35m",
+			[]int{36978,36999,40000,
+				  368640, 368840}, // data chunk #9*3
+			[]int{32+8192,32+8200, 32+40000}, // ecc chunk #0 *3
+			[]int{0,2,9},
+			[]int{0})
+	})
 
+	t.Run("bs=4096,rs=10-1,size=35M+4K,e=2d+2e", func(t *testing.T) {
+		encodeThenDecode(
+			t, 
+			types.Metadata{FileSize: 1024*1024*35+4096, BlockSize:4096, NumData:10, NumRecovery:1},
+			"multerr35m+4",
+			[]int{36978,36999,40000,
+				  368640, 368840}, // data chunk #9*3
+			[]int{32+8192,32+8200, 32+11111, 32+40000}, // ecc chunk #0 *3
+			[]int{0,2,9},
+			[]int{0})
+	})
 }
 

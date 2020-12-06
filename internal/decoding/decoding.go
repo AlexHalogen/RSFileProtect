@@ -28,7 +28,6 @@ import (
 	"math"
 	"github.com/klauspost/reedsolomon"
     "hash/crc32"
-    "encoding/binary"
 	"alexhalogen/rsfileprotect/internal/filehelper"
 	"alexhalogen/rsfileprotect/internal/types"
 )
@@ -37,20 +36,6 @@ type DamageDesc struct {
 	Section int
 	DataDamage []int
 	EccDamage []int
-}
-
-func readCRC(buffer []uint32, f *os.File) (int, error) {
-	byteBuffer := make([]byte, 4)
-	for i, _ := range buffer {
-		err := binary.Read(f, binary.LittleEndian, byteBuffer)
-		if err != nil {
-			if err != nil {
-				return i, err
-			}
-		}
-		buffer[i] = binary.LittleEndian.Uint32(byteBuffer)
-	}
-	return len(buffer), nil
 }
 
 func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile *os.File) ([]DamageDesc, bool){	
@@ -79,7 +64,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 	crcBuffer := make([]uint32, numData+numRecovery)
 	fileBuffer := make([][]byte, numData)
 	zero_page := make([]byte, bufferSize)
-	// filehelper.Memset(zero_page, 0, bufferSize, 0)
+	
 
 	for i, _ := range fileBuffer {
 		fileBufferPages[i] = make([]byte, bufferSize)
@@ -89,6 +74,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 	}
 	eccReader := filehelper.NewChunkedReader(eccFile, bufferSize, 0)
 	fileReader := filehelper.NewChunkedReader(dataFile, bufferSize, 0)
+	crcReader := filehelper.NewCRCReader(crcFile, 0)
 	batchCount := 0
 
 	for {
@@ -120,7 +106,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 			return damages, err
 		}
 
-		crcs, err := readCRC(crcBuffer, crcFile)
+		crcs, err := crcReader.ReadNext(crcBuffer)
 		if err != nil {
 			fmt.Println(err)
 			return damages, true
@@ -161,8 +147,14 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 	return damages, err
 }
 
-func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFile *os.File, damages []DamageDesc) (bool) {
+
+/**
+ * Fast repair by setting damaged chunks to nil;
+ * return location of repaired sections and whether all damages have been repaired
+ */
+func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFile *os.File, damages []DamageDesc) ([]int, bool) {
 	success := true
+	repaired := make([]int, 0, len(damages))
 
 	// seek file past meta area without using unsafe methods
 	var fmeta types.Metadata;
@@ -170,7 +162,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 	if metaErr != nil {
 		fmt.Println(metaErr)
 		fmt.Println("Failed to read metadata from ecc file!")
-		return success
+		return repaired, success
 	}
 	// trust metadata read from file if not specified in parameters
 	if meta == nil {
@@ -193,7 +185,6 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 	for i := range eccBufferPages {
 		eccBufferPages[i] = make([]byte, blockSize)
 	}
-
 
 	enc, _ := reedsolomon.New(numData, numRecovery)
 
@@ -250,6 +241,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 					success = false
 				}
 				copy(fileBuffer, repairBuffer[:numData]) // copy back repaired chunks for writing
+				repaired = append(repaired, dmg.Section)
 			}
 
 		} else { // no damage occured within the range, skip a section of ecc file		
@@ -268,5 +260,5 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 	if size % int64(blockSize) != 0 { // truncate the end of file	
 		outFile.Truncate(size)
 	}
-	return success
+	return repaired, success
 }
