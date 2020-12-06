@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"alexhalogen/rsfileprotect/internal/decoding"
 	// "alexhalogen/rsfileprotect/internal/filehelper"
@@ -21,14 +21,14 @@ func main() {
 
 	dataFile, err := os.Open(dataFileName)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	defer dataFile.Close()
 
 	eccFile, err := os.Open(*eccName)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	defer eccFile.Close()
@@ -37,17 +37,17 @@ func main() {
 	if crcName != nil {
 		crcFile, err = os.Open(*crcName)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 	}
 
-	fmt.Printf("Data: %s, ECC: %s, CRC: %s\n", dataFileName, *eccName, *crcName)
+	log.Printf("Data: %s, ECC: %s, CRC: %s\n", dataFileName, *eccName, *crcName)
 
 	
 	damages, failed := decoding.ScanFile(nil, dataFile, eccFile, crcFile)
 	if failed {
-		fmt.Printf("Severe error prevented repair of file %s\n", dataFileName)
+		log.Printf("Severe error prevented repair of file %s\n", dataFileName)
 		return
 	}
 
@@ -56,15 +56,16 @@ func main() {
 		eccFile.Seek(0,0)
 		outFile, err := os.OpenFile(dataFileName+".fix", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			fmt.Printf("Failed to open %s for repair\n", dataFileName+".fix")
+			log.Printf("Failed to open %s for repair\n", dataFileName+".fix")
 
 		}
 
-		success := decoding.FastRepair(nil, outFile, dataFile, eccFile, damages)
+		repaired, success := decoding.FastRepair(nil, outFile, dataFile, eccFile, damages)
 		if success {
-			fmt.Printf("Successfully repaired %s\n", dataFileName)
+			log.Printf("Successfully repaired %s\n", dataFileName)
 		} else {
-			fmt.Printf("File reconstruction failed, partial result saved")
+			log.Printf("File reconstruction failed, partial result saved")
+			log.Printf("Repaired sections: %v", repaired)
 		}
 	}
 
