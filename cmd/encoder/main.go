@@ -12,16 +12,19 @@ import (
 var eccName = flag.String("ecc", "", "Filename of generated ecc file")
 var blockSize = flag.Int("bs", 4096, "Size of chunks that files are splitted into during reed-solomon encoding")
 var level = flag.Int("level", 1, "Number of ecc symbols per 10 data symbols, default 1")
+var data = flag.String("data", "", "Required, file to be encoded")
+var showHelp = flag.Bool("h", false, "Prints this message")
 
 func mainWithExitCode() (int){
+
 	flag.Parse()
-	args := flag.Args()
-	
-	if !sanitizeArgs(args) {
+
+	if !sanitizeArgs(os.Args) {
+		printUsage()
 		return 1
 	}
 
-	dataName := args[0]
+	dataName := *data
 	dataFile, err := os.Open(dataName)
 
 	if err != nil {
@@ -61,7 +64,13 @@ func mainWithExitCode() (int){
 	return 0
 }
 
+func printUsage() {
+	log.Println("Command usage:\n  encoder <-data filename> [-ecc filename] [-level lvl]\n")
+	flag.PrintDefaults()
+}
+
 func main() {
+	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
 	os.Exit(mainWithExitCode())
 }
 
@@ -69,9 +78,14 @@ func sanitizeArgs(args []string) bool {
 	if len(args) < 1 {
 		return false
 	}
-
+	if *showHelp {
+		return false
+	}
+	if *data == "" {
+		return false
+	}
 	if *eccName == "" {
-		newName := args[0] + ".ecc"
+		newName := *data + ".ecc"
 		eccName = &newName
 	}
 

@@ -12,18 +12,6 @@ import(
 )
 
 
-func equals(a, b []int) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i,v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 /*func filterDataDmg(dmgs []decoding.DamageDesc) []int {
 	ret = make([]int, )
 
@@ -53,7 +41,7 @@ func corruptChunk(contents []byte, chunks []int, size int) {
 
 func makeTestFiles(t *testing.T, meta types.Metadata, dir string, prefix string) ([]byte, *os.File, *os.File, *os.File) {
 	
-	size := int(meta.FileSize)
+	size := int(meta.FileSize) // not using super big files in testing...
 	file, err := os.Create(filepath.Join(dir, prefix+".file"))
 	if err != nil {
 		t.Fatal("Cannot create file for testing")

@@ -24,7 +24,7 @@ package decoding
 
 import (
 	"os"
-	"fmt"
+	"log"
 	"math"
 	"github.com/klauspost/reedsolomon"
     "hash/crc32"
@@ -46,8 +46,8 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 	var fmeta types.Metadata;
 	metaErr := filehelper.ReadMeta(eccFile, &fmeta)
 	if metaErr != nil {
-		fmt.Println(metaErr)
-		fmt.Println("Failed to read metadata from ecc file!")
+		log.Println(metaErr)
+		log.Println("Failed to read metadata from ecc file!")
 		return damages, true
 	}
 	// trust metadata read from file if not specified in parameters
@@ -87,7 +87,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 		}
 
 		if feof || eeof {
-			fmt.Println("File read error: ecc/data ended earlier than the other")
+			log.Println("File read error: ecc/data ended earlier than the other")
 			err = true
 			// return // ?
 		}
@@ -101,18 +101,18 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 
 		if eRead < numRecovery {
 			// error
-			fmt.Printf("ECC Read Error at chunk %d\n", batchCount*numRecovery+eRead)
+			log.Printf("ECC Read Error at chunk %d\n", batchCount*numRecovery+eRead)
 			err = true
 			return damages, err
 		}
 
 		crcs, err := crcReader.ReadNext(crcBuffer)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return damages, true
 		}
 		if crcs != len(crcBuffer) {
-			fmt.Println("Less crc read")
+			log.Println("Less crc read")
 		}
 
 		dDamages := make([]int, 0,2)
@@ -123,7 +123,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 			crc := crc32.ChecksumIEEE(buf)
 			if crcBuffer[i] != crc {
 				idx := batchCount*numData+i
-				fmt.Printf("Data Block %d damaged, has crc %x, expected %x\n", idx, crc, crcBuffer[i])
+				log.Printf("Data Block %d damaged, has crc %x, expected %x\n", idx, crc, crcBuffer[i])
 				dDamages = append(dDamages, i)
 			}
 		}
@@ -133,7 +133,7 @@ func ScanFile(meta *types.Metadata, dataFile *os.File, eccFile *os.File, crcFile
 			crc := crc32.ChecksumIEEE(buf)
 			if crcBuffer[i+numData] != crc {
 				idx := batchCount*numRecovery+i
-				fmt.Printf("ECC  Block %d damaged, has crc %x, expected %x\n", idx, crc, crcBuffer[i+numData])
+				log.Printf("ECC  Block %d damaged, has crc %x, expected %x\n", idx, crc, crcBuffer[i+numData])
 				eDamages = append(eDamages, i)
 			}
 		}
@@ -160,8 +160,8 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 	var fmeta types.Metadata;
 	metaErr := filehelper.ReadMeta(eccFile, &fmeta)
 	if metaErr != nil {
-		fmt.Println(metaErr)
-		fmt.Println("Failed to read metadata from ecc file!")
+		log.Println(metaErr)
+		log.Println("Failed to read metadata from ecc file!")
 		return repaired, success
 	}
 	// trust metadata read from file if not specified in parameters
@@ -208,7 +208,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 			cur++
 			_, eof := eccReader.ReadNext(eccBuffer)
 			if eof {
-				fmt.Println("EOF during read to ecc file\n")
+				log.Println("EOF during read to ecc file\n")
 				success = false
 				break
 			}
@@ -217,7 +217,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 			if len(dmg.DataDamage) == 0 {
 				// only ecc damage, no need to repair
 			} else if totalDmg > numRecovery {
-				fmt.Printf("Failed to repair block %d-%d due to too many damages\n", i*numData, (i+1)*numData)
+				log.Printf("Failed to repair block %d-%d due to too many damages\n", i*numData, (i+1)*numData)
 				success = false
 				for i := range fileBuffer {
 					fileBuffer[i] = zero_page
@@ -237,7 +237,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 				enc.Reconstruct(repairBuffer)
 				ok, err := enc.Verify(repairBuffer)
 				if !ok || err != nil {
-					fmt.Printf("Reconstruction failed unexpectedly at block %d-%d\n", i, i+numData)
+					log.Printf("Reconstruction failed unexpectedly at block %d-%d\n", i, i+numData)
 					success = false
 				}
 				copy(fileBuffer, repairBuffer[:numData]) // copy back repaired chunks for writing
@@ -251,7 +251,7 @@ func FastRepair(meta *types.Metadata, outFile *os.File, dataFile *os.File, eccFi
 		for j:=0; j<chunksRead; j++ {
 			_, err := outFile.Write(fileBuffer[j])
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
 		}
 	}

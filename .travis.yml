@@ -2,8 +2,12 @@ language: go
 
 go:
   - 1.13.8
+
 before_install:
   - go get -t -v ./...
+
+install:
+	- make execs
 
 script:
   - go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=alexhalogen/rsfileprotect/internal/... ./test/... 
