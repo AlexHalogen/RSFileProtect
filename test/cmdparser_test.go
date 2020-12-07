@@ -7,6 +7,7 @@ import (
 	"alexhalogen/rsfileprotect/internal/types"
 	"alexhalogen/rsfileprotect/internal/decoding"
 	"alexhalogen/rsfileprotect/internal/cmdparser"
+	"alexhalogen/rsfileprotect/internal/testing"
 	"fmt"
 	"math/rand"
 	"time"
@@ -17,7 +18,7 @@ func TestMalformedArgs(t *testing.T) {
 		input string
 		want []int
 	}
-	
+
 	tests := []test{ 
 		{input: "[", want: nil},
 		{input: "]", want: nil},
@@ -43,7 +44,7 @@ func TestMalformedArgs(t *testing.T) {
 
 	for _, c := range tests {
 		res := cmdparser.CSVToIntArr(c.input)
-		if !equals(res, c.want) {
+		if !testing.equals(res, c.want) {
 			t.Error("Result differs")
 			fmt.Printf("Want: %v", c.want)
 			fmt.Printf("Has:  %v", res)
@@ -164,7 +165,7 @@ func testDmgCSVHelper (t *testing.T, numData, numRecovery uint16, setup string) 
 			t.FailNow()
 		}
 
-		if (!equals(d.DataDamage, calcDmgs[i].DataDamage) || !equals(d.EccDamage, calcDmgs[i].EccDamage)) {
+		if (!testing.equals(d.DataDamage, calcDmgs[i].DataDamage) || !testing.equals(d.EccDamage, calcDmgs[i].EccDamage)) {
 			t.Error("Calculated damages differ")
 			testDmgCSVInfo(&setup, s1, s2, damages, calcDmgs, numData, numRecovery)
 			t.FailNow()

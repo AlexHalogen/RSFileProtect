@@ -1,4 +1,4 @@
-package main
+package testing
 
 func equals(a, b []int) bool {
 	if len(a) != len(b) {
