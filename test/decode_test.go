@@ -1,4 +1,4 @@
-package main
+package test
 
 import(
 	"testing"
@@ -9,7 +9,6 @@ import(
 	"alexhalogen/rsfileprotect/internal/decoding"
 	"alexhalogen/rsfileprotect/internal/encoding"
 	"alexhalogen/rsfileprotect/internal/types"
-	"alexhalogen/rsfileprotect/internal/testing"
 )
 
 
@@ -135,7 +134,7 @@ func encodeThenDecode(
 		ad = append(ad, d.Section)
 	}
 
-	if !testing.equals(ad, expectedDmgs) {
+	if !equals(ad, expectedDmgs) {
 		t.Errorf("Decoder detected error %v, expecting %v", ad, expectedDmgs)
 		t.FailNow()
 	}

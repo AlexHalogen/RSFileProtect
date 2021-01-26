@@ -1,4 +1,4 @@
-package main
+package test
 
 import (
 	"os"
@@ -6,8 +6,6 @@ import (
 	"testing"
 	"io/ioutil"
 	"path/filepath"
-
-
 )
 
 type switches struct {
